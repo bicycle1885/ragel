@@ -9,7 +9,7 @@ namespace julia_out
 			'/*' any* :>> '*/'
 		/
 
-		literal `function `end `while `if `else `elseif
+		literal `function `end `while `if `else `elseif `@switch
 
 		token id
 			/[a-zA-Z_][a-zA-Z_0-9]*/
@@ -42,6 +42,7 @@ namespace julia_out
 	|	[_EX_ `elseif _IN_]
 	|	[_EX_ `else _IN_]
 	|	[_EX_ `end]
+	|	[`@switch _IN_]
 
 	def item
 		[comment]
@@ -164,7 +165,7 @@ namespace julia_gen
 		case [`cast `( T: type `) F: expr_factor]
 		{
 			send Parser 
-				"convert([type( T )], [expr_factor( F )] )"
+				"convert([type( T )], [expr_factor( F )])"
 		}
 		default {
 			# Catches cases not specified
@@ -305,17 +306,17 @@ namespace julia_gen
 	{
 		switch Type
 		case "s8"
-			send Parser ['Int8']
+			send Parser ['Int']
 		case "u8"
-			send Parser ['UInt8']
+			send Parser ['UInt']
 		case "s16"
-			send Parser ['Int16']
+			send Parser ['Int']
 		case "s32"
-			send Parser ['Int32']
+			send Parser ['Int']
 		case "s64"
-			send Parser ['Int64']
+			send Parser ['Int']
 		case "s128"
-			send Parser ['Int128']
+			send Parser ['Int']
 		case "uint"
 			send Parser ['UInt']
 		case "int"
@@ -355,34 +356,13 @@ namespace julia_gen
 			send Parser
 				"const [V.ident] = [V.number]
 		}
-		# case [declaration]
-		case [
-			TypeList: opt_const Type: type
-			Ident: ident OptInit: opt_init Semi: `;
-		]
-		{
-			send Parser
-				[Ident]
-
-			if match OptInit [E: `= expr] {
-				send Parser
-					[E expr(OptInit.expr)]
-			}
-			else {
-				send Parser
-					"= 0
-			}
-
-			send Parser
-				[Semi]
-		}
 		case [
 				`if `( IfExpr: expr `) IfStmt: stmt
 				ElseIfClauseList: else_if_clause* ElseClauseOpt: else_clause?
 		] {
 			send Parser
 				"if [expr(IfExpr)]
-				"	[stmt(IfStmt)]
+					[stmt(IfStmt)]
 
 			for ElseIfClause: else_if_clause in repeat( ElseIfClauseList ) {
 				match ElseIfClause
@@ -390,13 +370,13 @@ namespace julia_gen
 
 				send Parser
 					"elseif [expr(ElseIfExpr)]
-					"	[stmt(ElseIfStmt)]
+						[stmt(ElseIfStmt)]
 			}
 
 			if ( match ElseClauseOpt ['else' ElseStmt: stmt] ) {
 				send Parser
 					"else
-					"	[stmt(ElseStmt)]
+						[stmt(ElseStmt)]
 			}
 
 			send Parser
@@ -405,36 +385,14 @@ namespace julia_gen
 		case [`while `( WhileExpr: expr `) WhileStmt: stmt] {
 			send Parser
 				"while [expr(WhileExpr)]
-				"	[stmt(WhileStmt)]
+					[stmt(WhileStmt)]
 				"end
 		}
 		case [`switch `( SwitchExpr: expr `) `{ StmtList: stmt* `}] {
 
-			require StmtList
-				[`case E1: expr `{ Inner: stmt* `} Rest: stmt*]
-
 			send Parser
-				"if [expr(SwitchExpr)] == [expr(E1)]
-				"	[stmt_list(Inner)]
-
-			for S: stmt in repeat(Rest) {
-				switch S
-				case [`case E1: expr `{ Inner: stmt* `}]
-				{
-					send Parser
-						"elseif [expr(SwitchExpr)] == [expr(E1)]
-						"	[stmt_list(Inner)]
-				}
-				case
-					[`default `{ Inner: stmt* `}]
-				{
-					send Parser
-						"else
-						"	[stmt_list(Inner)]
-				}
-			}
-
-			send Parser
+				"@switch [expr(SwitchExpr)] begin
+					[stmt_list(StmtList)]
 				"end
 		}
 		case [ExprExpr: expr Semi: `;] {
@@ -451,15 +409,16 @@ namespace julia_gen
 		]
 		{
 			send Parser
-				[TypeList type(Type) Ident]
+				[Ident] "::" [type(Type)]
 
 			if match OptInit [E: `= expr] {
 				send Parser
-					[E expr(OptInit.expr)]
+					"[E expr(OptInit.expr)]
 			}
-
-			send Parser
-				[Semi]
+			else {
+				send Parser
+					" = 0
+			}
 		}
 		case [Export: export_stmt]
 		{
@@ -473,7 +432,7 @@ namespace julia_gen
 		case [Index: index_stmt]
 		{
 			send Parser
-				"[Index.ident] = 0;
+				"# index: [Index.ident]
 		}
 		case [case_block]
 		{
@@ -509,6 +468,11 @@ namespace julia_gen
 		{
 			send Parser
 				"@goto [G.ident]
+		}
+		case [B: break_stmt]
+		{
+			send Parser
+				"break
 		}
 		case [entry_loop]
 		{
