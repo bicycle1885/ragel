@@ -409,28 +409,23 @@ namespace julia_gen
 				"end
 		}
 		case [`switch `( SwitchExpr: expr `) `{ StmtList: stmt* `}] {
-
 			require StmtList
-				[`case E1: expr `{ Inner: stmt* `} Rest: stmt*]
+				[`case E1: expr `: Rest: stmt*]
 
 			send Parser
 				"if [expr(SwitchExpr)] == [expr(E1)]
-				"	[stmt_list(Inner)]
 
 			for S: stmt in repeat(Rest) {
 				switch S
-				case [`case E1: expr `{ Inner: stmt* `}]
-				{
+				case [`case E1: expr `:] {
 					send Parser
 						"elseif [expr(SwitchExpr)] == [expr(E1)]
-						"	[stmt_list(Inner)]
 				}
-				case
-					[`default `{ Inner: stmt* `}]
-				{
-					send Parser
-						"else
-						"	[stmt_list(Inner)]
+				case [break_stmt] {
+					# do not emit the `break` statement
+				}
+				default {
+					stmt(S)
 				}
 			}
 
