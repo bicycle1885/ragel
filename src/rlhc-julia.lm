@@ -506,6 +506,11 @@ namespace julia_gen
 			send Parser
 				"@goto [G.ident]
 		}
+		case [break_stmt]
+		{
+			send Parser
+				"break
+		}
 		case [entry_loop]
 		{
 			send Parser
